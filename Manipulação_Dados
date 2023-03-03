@@ -1,0 +1,37 @@
+import os
+from netCDF4 import Dataset
+import numpy as np
+import datetime
+
+dir = "dados/mur/"
+
+time_list = []
+tsm_list = []
+
+for root, dirs, files in os.walk(dir):
+    for filename in files:
+            if filename.endswith("_subset_analysed_sst.nc"):
+                
+                print(filename)
+            
+                time_start = filename[:8]
+                time_start = datetime.datetime.strptime(time_start,'%Y%m%d').date()
+                print(time_start)
+                time_list.append(time_start)
+                
+                file = Dataset(dir+filename)
+                
+                tsm = file['z'][96:110, 57:67].data
+                tsm = np.nanmean(tsm)
+                tsm_list.append(tsm.item())
+                
+            
+# Converte a lista de tempo em um array numerico 
+time_int = [tt.toordinal() for tt in time_list]
+time_array = np.asarray(time_int)
+            
+# Converte a lista de tsm em um array numerico
+tsm_array = np.asarray(tsm_list)
+
+np.save('tsm_array_1',tsm_array)
+np.save('time_array_1',time_array)
