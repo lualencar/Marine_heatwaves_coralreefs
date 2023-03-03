@@ -1,0 +1,148 @@
+# Load required modules
+import numpy as np
+from datetime import date
+from matplotlib import pyplot as plt
+%pylab inline
+import pandas as pd
+import sys
+
+from google.colab import drive
+drive.mount('/content/drive')
+
+sys.path.append('/content/drive/MyDrive/Colab Notebooks')
+
+import marineHeatWaves as mhw
+
+t = np.load('/content/drive/MyDrive/Colab Notebooks/time_array.npy')
+dates = [datetime.date.fromordinal(tt.astype(int)) for tt in t]
+print(t.shape)
+sst = np.load('/content/drive/MyDrive/Colab Notebooks/tsm_array.npy')
+print(sst)
+
+df = pd.DataFrame(
+    {
+        "Data": dates,
+        "TSM": sst,
+    }
+)
+print(df)
+
+df_mean = df.groupby(pd.PeriodIndex(df['Data'], freq="M"))['TSM'].mean().reset_index()
+df_std = df.groupby(pd.PeriodIndex(df['Data'], freq="M"))['TSM'].std().reset_index()
+print(df_mean)
+
+df_mean.plot(x="Data", y="TSM")
+
+mhws, clim = mhw.detect(t, sst)
+mhws['n_events']
+mhws['intensity_max'][0:10]
+mhws['date_start']
+ev = np.argmax(mhws['intensity_max']) # Find largest event
+print('Maximum intensity:', mhws['intensity_max'][ev], 'deg. C')
+print('Average intensity:', mhws['intensity_mean'][ev], 'deg. C')
+print('Cumulative intensity:', mhws['intensity_cumulative'][ev], 'deg. C-days')
+print('Duration:', mhws['duration'][ev], 'days')
+print('Start date:', mhws['date_start'][ev].strftime("%d %B %Y"))
+print('End date:', mhws['date_end'][ev].strftime("%d %B %Y"))
+
+print(clim['seas'])
+anomaly = sst - clim['seas']
+plt.plot(dates, anomaly)
+
+plt.figure(figsize=(14,10))
+plt.subplot(2,1,1)
+
+plt.plot(dates, sst, 'k-')
+plt.plot(dates, clim['thresh'], 'g-')
+plt.plot(dates, clim['seas'], 'b-')
+plt.title('SST (black), seasonal climatology (blue), \
+          threshold (green), detected MHW events (shading)')
+plt.xlim(t[0], t[-1])
+plt.ylim(sst.min()-0.5, sst.max()+0.5)
+plt.ylabel(r'SST [$^\circ$C]')
+plt.subplot(2,1,2)
+
+t1 = np.where(t==mhws['time_start'][ev])[0][0]
+t2 = np.where(t==mhws['time_end'][ev])[0][0]
+plt.fill_between(dates[t1:t2+1], sst[t1:t2+1], clim['thresh'][t1:t2+1], \
+                 color='r')
+
+plt.plot(dates, sst, 'k-', linewidth=2)
+plt.plot(dates, clim['thresh'], 'g-', linewidth=2)
+plt.plot(dates, clim['seas'], 'b-', linewidth=2)
+plt.title('SST (black), seasonal climatology (blue), \
+          threshold (green), detected MHW events (shading)')
+plt.xlim(mhws['time_start'][ev]-150, mhws['time_end'][ev]+150)
+plt.ylim(clim['seas'].min() - 1, clim['seas'].max() + mhws['intensity_max'][ev] + 0.5)
+plt.ylabel(r'SST [$^\circ$C]')
+
+plt.figure(figsize=(15,7))
+# Duration
+plt.subplot(2,2,1)
+evMax = np.argmax(mhws['duration'])
+plt.bar(range(mhws['n_events']), mhws['duration'], width=0.6, \
+        color=(0.7,0.7,0.7))
+plt.bar(evMax, mhws['duration'][evMax], width=0.6, color=(1,0.5,0.5))
+plt.bar(ev, mhws['duration'][ev], width=0.6, edgecolor=(1,0.,0.), \
+        color='none')
+plt.xlim(0, mhws['n_events'])
+plt.ylabel('[days]')
+plt.title('Duration')
+# Maximum intensity
+plt.subplot(2,2,2)
+evMax = np.argmax(mhws['intensity_max'])
+plt.bar(range(mhws['n_events']), mhws['intensity_max'], width=0.6, \
+        color=(0.7,0.7,0.7))
+plt.bar(evMax, mhws['intensity_max'][evMax], width=0.6, color=(1,0.5,0.5))
+plt.bar(ev, mhws['intensity_max'][ev], width=0.6, edgecolor=(1,0.,0.), \
+        color='none')
+plt.xlim(0, mhws['n_events'])
+plt.ylabel(r'[$^\circ$C]')
+plt.title('Maximum Intensity')
+# Mean intensity
+plt.subplot(2,2,4)
+evMax = np.argmax(mhws['intensity_mean'])
+plt.bar(range(mhws['n_events']), mhws['intensity_mean'], width=0.6, \
+        color=(0.7,0.7,0.7))
+plt.bar(evMax, mhws['intensity_mean'][evMax], width=0.6, color=(1,0.5,0.5))
+plt.bar(ev, mhws['intensity_mean'][ev], width=0.6, edgecolor=(1,0.,0.), \
+        color='none')
+plt.xlim(0, mhws['n_events'])
+plt.title('Mean Intensity')
+plt.ylabel(r'[$^\circ$C]')
+plt.xlabel('MHW event number')
+# Cumulative intensity
+plt.subplot(2,2,3)
+evMax = np.argmax(mhws['intensity_cumulative'])
+plt.bar(range(mhws['n_events']), mhws['intensity_cumulative'], width=0.6, \
+        color=(0.7,0.7,0.7))
+plt.bar(evMax, mhws['intensity_cumulative'][evMax], width=0.6, color=(1,0.5,0.5))
+plt.bar(ev, mhws['intensity_cumulative'][ev], width=0.6, edgecolor=(1,0.,0.), \
+        color='none')
+plt.xlim(0, mhws['n_events'])
+plt.title(r'Cumulative Intensity')
+plt.ylabel(r'[$^\circ$C$\times$days]')
+plt.xlabel('MHW event number')
+
+mhwBlock = mhw.blockAverage(t, mhws)
+plt.figure(figsize=(14,4))
+plt.subplot(1,2,1)
+plt.plot(mhwBlock['years_centre'], mhwBlock['count'], 'k-o')
+plt.ylim(0,9)
+plt.ylabel('[count]')
+plt.title('Number of MHWs by year')
+plt.subplot(1,2,2)
+plt.plot(mhwBlock['years_centre'], mhwBlock['intensity_max'], 'k-o')
+plt.ylabel(r'[$^\circ$C]')
+plt.title('Average MHW maximum intensity by year')
+
+mean, trend, dtrend = mhw.meanTrend(mhwBlock)
+print("There are on average " + str(mean['count']) + " MHWs in each year, \n \
+with a linear trend of " + str(10*trend['count']) + " MHW events per decade \n \
+This trend is statistically significant (p<0.05): " \
++ str(np.abs(trend['count']) > dtrend['count']) + "\n")
+
+print("The average maximum intensity is " + str(mean['intensity_max']) + " deg. C, \n \
+with a linear trend of " + str(10*trend['intensity_max']) + " deg. C per decade \n \
+This trend is statistically significant (p<0.05): " \
++ str(np.abs(trend['intensity_max']) > dtrend['intensity_max']))
